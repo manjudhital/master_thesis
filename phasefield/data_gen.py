@@ -15,7 +15,7 @@ def exp_quadratic(X1, X2, length_scale):
     """Compute the exponential quadratic kernel."""
     dists = cdist(X1, X2, metric="sqeuclidean") #dists is distance and cdists is computed distance between two points 
     # print("Distances min:", jnp.min(dists), "max:", jnp.max(dists))
-    kernel = jnp.exp(-dists / (2 * length_scale**2))
+    kernel = jnp.exp(-dists / (2 * length_scale**2)) # aply the kernel function, wich gives the smoothness of te function
     # print("Kernel min:", jnp.min(kernel), "max:", jnp.max(kernel))
     return kernel
 
@@ -49,11 +49,12 @@ def gaussian_process_2d(x, n_grid, n_samples, length_scale_list, u_mean=0.0, key
 
     samples = []
     for i in range(n_samples):
-        print(f'Sample:  {i+1} out of {n_samples} generation started')
+        # print(f'generating data {i+1} started out of {n_samples}')
         # Select random length scale
-        length_scale = random.choice(key, jnp.array(length_scale_list))
+        key, subkey = random.split(key)  # Split the key to ensure randomness
+        length_scale = random.choice(subkey, jnp.array(length_scale_list))
         # Compute covariance matrix
-        cov = exp_quadratic(grid_points, grid_points, length_scale)
+        cov = exp_quadratic(grid_points, grid_points, length_scale) # covariance matric is computed, which is used to generate the data, and its gives the relation between the points
         jitter = 1e-5
         cov += jitter * jnp.eye(cov.shape[0])
 
@@ -65,7 +66,7 @@ def gaussian_process_2d(x, n_grid, n_samples, length_scale_list, u_mean=0.0, key
         # Generate sample
         sample = random.multivariate_normal(key, u_mean * jnp.ones(grid_points.shape[0]), cov)
         samples.append(sample)
-        print(f'Sample:  {i+1} generation finished')
+        # print(f'generating data {i+1} done out of {n_samples}')
 
 
     return grid_points, jnp.array(samples)
@@ -88,7 +89,7 @@ def normalize(data):
 
 # Data class
 class Data:
-    def __init__(self, x, n_grid, length_scale_list, train_num, test_num):
+    def __init__(self, x, n_grid, length_scale_list, num_samples):
         """
         Initialize data generator.
 
@@ -102,14 +103,14 @@ class Data:
         self.x = x
         self.n_grid = n_grid
         self.length_scale_list = length_scale_list
-        self.train_num = train_num
-        self.test_num = test_num
+        self.num_samples = num_samples
+        # self.test_num = test_num
         self.__init_data()
 
     def __init_data(self):
         """Initialize training and testing data."""
-        self.X, self.u_train = self.u_data(self.train_num)
-        _, self.u_test = self.u_data(self.test_num)
+        self.X, self.num_samples = self.u_data(self.num_samples)
+        # _, self.u_test = self.u_data(self.test_num)
 
     def u_data(self, n_samples=1):
         """
@@ -128,7 +129,12 @@ class Data:
             self.x, self.n_grid, n_samples, self.length_scale_list
         )
 
+        
+
+
         # Normalize and reshape the samples
+        us = us - jnp.mean(us, axis=0)  # Subtract mean to introduce variance
+
         us = normalize(us)
         us = us.reshape(-1, self.n_grid, self.n_grid, 1)
 
@@ -139,11 +145,16 @@ class Data:
         # Here we create random RGB values for each sample (you can adjust this as needed)
         us_rgb = np.random.rand(n_samples, self.n_grid, self.n_grid, 3)  # RGB values for color images
 
+        key = random.PRNGKey(42)  # Initialize PRNG key
+        key, subkey = random.split(key)  # Split key to create subkey
+
+
         # You could also modify the us data to contain meaningful RGB values
-        # Example: combining some part of 'us' for each channel
-        us_rgb[..., 0] = us[..., 0]  # Red channel from the 'us' data
-        us_rgb[..., 1] = us[..., 0]  # Green channel from the 'us' data
-        us_rgb[..., 2] = us[..., 0]  # Blue channel from the 'us' data
+            # Example: combining some part of 'us' for each channel
+        us_rgb[..., 0] = normalize(random.normal(subkey, shape=us[..., 0].shape))  # Red
+        us_rgb[..., 1] = normalize(random.normal(subkey, shape=us[..., 0].shape))  # Green
+        us_rgb[..., 2] = normalize(random.normal(subkey, shape=us[..., 0].shape))  # Blue
+
 
         return X, us_rgb
 
@@ -152,36 +163,38 @@ class Data:
 
 # Example Usage
 if __name__ == "__main__":
-    print(' data generation start: ')
     # Example: Adjust resolution and domain length
     domain = (-jnp.pi, jnp.pi, -jnp.pi, jnp.pi)  
     resolution = 128  # Number of grid points per dimension
     length_scale_list = [0.1, 0.5, 1.0, 2.0]  # Kernel length scales # its indicate the smoothness of the data 
-    train_samples = 8000 # Number of training samples
-    test_samples = 2000  # Number of testing samples
+    num_samples = 5 # Number of training samples
+    # test_samples = 5  # Number of testing samples
 
     # Create data object
-    data = Data(domain, resolution, length_scale_list, train_samples, test_samples)
+    data = Data(domain, resolution, length_scale_list, num_samples)
 
     # Specify the directory where y want to save the data
-    save_dir = './data_generation/'
+    save_dir = './data_generation_checking/'
 
      # Ensure the directory exists, create it if not
     os.makedirs(save_dir, exist_ok=True)
 
     # Access generated data
-    print("Training data shape (u_train):", data.u_train.shape)  # (train_samples, resolution, resolution, 1)
-    print("Testing data shape (u_test):", data.u_test.shape)  # (test_samples, resolution, resolution, 1)
+    # print("Training data shape (u_train):", data.u_train.shape)  # (train_samples, resolution, resolution, 1)
+    # print("Testing data shape (u_test):", data.u_test.shape)  # (test_samples, resolution, resolution, 1)
 
     # Start the timer
     start_time = time.time()
 
     # Save the training and testing data
     print("Saving training data to u_train.npy...")
-    np.save(os.path.join(save_dir, "u_train.npy"), np.array(data.u_train))
+    np.save(os.path.join(save_dir, "phasefield_data.npy"), np.array(data.num_samples))
 
-    print("Saving testing data to u_test.npy...")
-    np.save(os.path.join(save_dir, "u_test.npy"), np.array(data.u_test))
+    # print("Saving testing data to u_test.npy...")
+    # np.save(os.path.join(save_dir, "u_test.npy"), np.array(data.u_test))
+
+    print("Saving grid points to grid.npy...")
+    np.save(os.path.join(save_dir, "grid.npy"), np.array(data.x))
 
     # print("Data saving completed!")
 
@@ -220,14 +233,14 @@ if __name__ == "__main__":
 
 # Select a sample to plot
 sample_index = 0  # Choose a specific sample (e.g., the first one)
-sample = data.u_train[sample_index, :, :, 0]  # Extract the 2D array for the sample
+sample = data.num_samples[sample_index, :, :, 0]  # Extract the 2D array for the sample
 # print(f'sample data = {sample}')
 
 # Plot the sample
 plt.figure(figsize=(8, 6))
 plt.imshow(sample, extent=[-jnp.pi, jnp.pi, -jnp.pi, jnp.pi], origin='lower', cmap='viridis')
 plt.colorbar(label="u(x, y)")
-plt.title(f"Sample {sample_index} from u_train")
+plt.title(f"Sample {sample_index} from num_samples")
 plt.xlabel("x")
 plt.ylabel("y")
 plt.show()
