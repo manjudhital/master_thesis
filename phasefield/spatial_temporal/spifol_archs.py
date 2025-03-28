@@ -152,6 +152,7 @@ def Permute(order):
         return output_shape, ()
 
     def apply_fun(params, inputs, **kwargs):
+        print(f'inputs shape inside permute:{inputs.shape}')
         outputs = jnp.einsum(order, inputs)
         return outputs
 
