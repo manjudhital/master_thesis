@@ -1,3 +1,4 @@
 *.npy filter=lfs diff=lfs merge=lfs -text
 phasefield/implicit_part.ipynb filter=lfs diff=lfs merge=lfs -text
 phasefield/data_driven/data_driven_implicit.ipynb filter=lfs diff=lfs merge=lfs -text
+*.ipynb filter=lfs diff=lfs merge=lfs -text
